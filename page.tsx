@@ -1,21 +1,25 @@
-import { redirect } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import TasksClient from './TasksClient'
+import TaskDetailClient from './TaskDetailClient'
 
-export default async function TasksPage() {
+export default async function TaskDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const [tasksRes, submissionsRes] = await Promise.all([
-    supabase.from('tasks').select('*').eq('is_active', true).order('reward_amount', { ascending: false }),
-    supabase.from('task_submissions').select('task_id, status').eq('user_id', user.id),
+  const [taskRes, submissionRes, profileRes] = await Promise.all([
+    supabase.from('tasks').select('*').eq('id', params.id).single(),
+    supabase.from('task_submissions').select('*').eq('task_id', params.id).eq('user_id', user.id).maybeSingle(),
+    supabase.from('profiles').select('id').eq('id', user.id).single(),
   ])
 
+  if (!taskRes.data) notFound()
+
   return (
-    <TasksClient
-      tasks={tasksRes.data ?? []}
-      submissions={submissionsRes.data ?? []}
+    <TaskDetailClient
+      task={taskRes.data}
+      existingSubmission={submissionRes.data}
+      userId={user.id}
     />
   )
 }
